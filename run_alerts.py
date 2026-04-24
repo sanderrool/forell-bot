@@ -50,11 +50,9 @@ def evaluate_point(point, speeds, dirs):
     future_speeds = speeds[48:96]
     future_dirs = dirs[48:96]
 
-    # 1. Torm minevikus
     if any(s > STORM_LIMIT for s in past_speeds):
         return False, "torm minevikus"
 
-    # 2. Meretuule püsivus minevikus
     good_past = sum(
         1 for s, d in zip(past_speeds, past_dirs)
         if sea_ok(d, point["sea_wind_min"], point["sea_wind_max"]) and s <= GOOD_WIND_MAX
@@ -63,7 +61,6 @@ def evaluate_point(point, speeds, dirs):
     if good_past < 12:
         return False, "meretuul pole olnud piisav"
 
-    # 3. Tulevik (esimene 24h)
     future_day = list(zip(future_speeds[:24], future_dirs[:24]))
 
     good_future = sum(
@@ -76,7 +73,7 @@ def evaluate_point(point, speeds, dirs):
 
     return True, "tingimused head"
 
-def build_rows(point, times, speeds, dirs, precip, temp, indices):
+def build_rows(point, indices, times, speeds, dirs, precip, temp):
     rows = []
     last_day = None
 
@@ -113,12 +110,11 @@ def build_series(point):
     past_idx = [i for i, t in enumerate(parsed_times) if t <= now][-24:]
     future_idx = [i for i, t in enumerate(parsed_times) if t > now][:48]
 
-    # sampling
-    past_idx = past_idx[::2]      # iga 2h
-    future_idx = future_idx[::3]  # iga 3h
+    past_idx = past_idx[::2]
+    future_idx = future_idx[::3]
 
-    past_rows = build_rows(point, times, speeds, dirs, precip, temp, past_idx)
-    future_rows = build_rows(point, times, speeds, dirs, precip, temp, future_idx)
+    past_rows = build_rows(point, past_idx, times, speeds, dirs, precip, temp)
+    future_rows = build_rows(point, future_idx, times, speeds, dirs, precip, temp)
 
     return past_rows, future_rows, speeds, dirs
 
@@ -142,10 +138,25 @@ def main():
     bad_spots = []
     details = []
 
+    best_spot = None
+    best_score = -999
+
     for p in points:
         past, future, speeds, dirs = build_series(p)
-
         ok, reason = evaluate_point(p, speeds, dirs)
+
+        # scoring
+        future_speeds = speeds[48:96]
+        future_dirs = dirs[48:96]
+
+        score = sum(
+            1 for s, d in zip(future_speeds[:24], future_dirs[:24])
+            if sea_ok(d, p["sea_wind_min"], p["sea_wind_max"]) and s <= GOOD_WIND_MAX
+        )
+
+        if score > best_score:
+            best_score = score
+            best_spot = (p["name"], reason)
 
         if ok:
             head_spots.append((p["name"], reason))
@@ -155,8 +166,16 @@ def main():
         details.append((p, past, future))
 
     lines = []
-    lines.append(f"Forellipüügi raport")
+    lines.append("Forellipüügi raport")
     lines.append(f"Aeg: {fmt_dt(now)}")
+    lines.append("")
+
+    # PARIM KOHT
+    lines.append("PARIM VÕIMALUS:")
+    if best_spot:
+        lines.append(f"{best_spot[0]} – {best_spot[1]}")
+    else:
+        lines.append("Puudub")
     lines.append("")
 
     # HEAD
