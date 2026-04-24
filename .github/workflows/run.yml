@@ -1,0 +1,30 @@
+name: Forell Bot
+
+on:
+  schedule:
+    - cron: '0 5 * * 5'   # iga reede kell 14 Eesti aja järgi
+  workflow_dispatch:       # võimaldab käsitsi käivitada
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Võta repo sisu
+        uses: actions/checkout@v4
+
+      - name: Seadista Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Paigalda paketid
+        run: pip install -r requirements.txt
+
+      - name: Käivita skript
+        env:
+          EMAIL_SENDER: ${{ secrets.EMAIL_SENDER }}
+          EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
+          EMAIL_RECEIVER_1: ${{ secrets.EMAIL_RECEIVER_1 }}
+          EMAIL_RECEIVER_2: ${{ secrets.EMAIL_RECEIVER_2 }}
+        run: python run_alerts.py
