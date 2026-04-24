@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 from zoneinfo import ZoneInfo
 
 import matplotlib
-matplotlib.use("Agg")  # <-- kriitiline fix GitHub jaoks
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -29,16 +29,20 @@ EMAIL_RECEIVERS = [
 GOOD_WIND_MAX = 5.0
 STORM_LIMIT = 10.0
 
+
 def fmt_dt(dt):
     return dt.astimezone(TALLINN_TZ).strftime("%d.%m %H:%M")
 
+
 def parse_api_time(value):
     return datetime.strptime(value, "%Y-%m-%dT%H:%M").replace(tzinfo=TALLINN_TZ)
+
 
 def sea_ok(direction, min_dir, max_dir):
     if min_dir <= max_dir:
         return min_dir <= direction <= max_dir
     return direction >= min_dir or direction <= max_dir
+
 
 def get_weather(lat, lon):
     url = "https://api.open-meteo.com/v1/forecast"
@@ -52,40 +56,6 @@ def get_weather(lat, lon):
     }
     return requests.get(url, params=params).json()
 
-# -------------------------
-# KAARDI LOOMINE
-# -------------------------
-def create_map(points):
-    fig, ax = plt.subplots(figsize=(8, 10))
-
-    for p in points:
-        data = get_weather(p["lat"], p["lon"])
-
-        speed = data["hourly"]["windspeed_10m"][0]
-        direction = data["hourly"]["winddirection_10m"][0]
-
-        ax.scatter(p["lon"], p["lat"])
-
-        angle = np.deg2rad(direction)
-        dx = np.sin(angle) * 0.05
-        dy = np.cos(angle) * 0.05
-
-        ax.arrow(p["lon"], p["lat"], dx, dy, head_width=0.02)
-
-        ax.text(
-            p["lon"], p["lat"],
-            f"{p['name']}\n{speed:.1f} m/s\n{int(direction)}°",
-            fontsize=8
-        )
-
-    ax.set_title("Tuule suund ja tugevus")
-    ax.grid()
-
-    filename = "wind_map.png"
-    plt.savefig(filename)
-    plt.close()
-
-    return filename
 
 # -------------------------
 # ANALÜÜS
@@ -117,6 +87,7 @@ def evaluate_point(point, speeds, dirs):
 
     return True, "tingimused head"
 
+
 def calculate_rank(point, speeds, dirs):
     future_speeds = speeds[48:96]
     future_dirs = dirs[48:96]
@@ -126,6 +97,10 @@ def calculate_rank(point, speeds, dirs):
         if sea_ok(d, point["sea_wind_min"], point["sea_wind_max"]) and s <= GOOD_WIND_MAX
     )
 
+
+# -------------------------
+# AJARIDA
+# -------------------------
 def build_rows(point, indices, times, speeds, dirs, precip, temp):
     rows = []
     last_day = None
@@ -148,9 +123,8 @@ def build_rows(point, indices, times, speeds, dirs, precip, temp):
 
     return rows
 
-def build_series(point):
-    data = get_weather(point["lat"], point["lon"])
 
+def build_series_from_data(point, data):
     times = data["hourly"]["time"]
     speeds = data["hourly"]["windspeed_10m"]
     dirs = data["hourly"]["winddirection_10m"]
@@ -170,6 +144,40 @@ def build_series(point):
     future_rows = build_rows(point, future_idx, times, speeds, dirs, precip, temp)
 
     return past_rows, future_rows, speeds, dirs
+
+
+# -------------------------
+# KAART (CACHE BAASIL)
+# -------------------------
+def create_map(points, weather_cache):
+    fig, ax = plt.subplots(figsize=(8, 10))
+
+    for p in points:
+        data = weather_cache[p["name"]]
+
+        speed = data["hourly"]["windspeed_10m"][0]
+        direction = data["hourly"]["winddirection_10m"][0]
+
+        ax.scatter(p["lon"], p["lat"])
+
+        angle = np.deg2rad(direction)
+        dx = np.sin(angle) * 0.05
+        dy = np.cos(angle) * 0.05
+
+        ax.arrow(p["lon"], p["lat"], dx, dy, head_width=0.02)
+
+        ax.text(
+            p["lon"], p["lat"],
+            f"{p['name']}\n{speed:.1f} m/s",
+            fontsize=8
+        )
+
+    filename = "wind_map.png"
+    plt.savefig(filename)
+    plt.close()
+
+    return filename
+
 
 # -------------------------
 # EMAIL
@@ -195,6 +203,7 @@ def send_email(body, image_file):
         server.login(EMAIL_SENDER, EMAIL_PASSWORD)
         server.sendmail(EMAIL_SENDER, EMAIL_RECEIVERS, msg.as_string())
 
+
 # -------------------------
 # MAIN
 # -------------------------
@@ -204,10 +213,17 @@ def main():
 
     now = datetime.now(TALLINN_TZ)
 
+    weather_cache = {}
+
+    for p in points:
+        weather_cache[p["name"]] = get_weather(p["lat"], p["lon"])
+
     results = []
 
     for p in points:
-        past, future, speeds, dirs = build_series(p)
+        data = weather_cache[p["name"]]
+
+        past, future, speeds, dirs = build_series_from_data(p, data)
         ok, reason = evaluate_point(p, speeds, dirs)
         rank = calculate_rank(p, speeds, dirs)
 
@@ -225,8 +241,7 @@ def main():
 
     best = results[0] if results else None
 
-    # KAART
-    image_file = create_map(points)
+    image_file = create_map(points, weather_cache)
 
     lines = []
     lines.append("Forellipüügi raport")
@@ -242,7 +257,7 @@ def main():
         lines.append("Puudub")
 
     lines.append("")
-    lines.append("="*60)
+    lines.append("=" * 60)
 
     for r in results:
         status = "GO" if r["ok"] else "WAIT"
@@ -267,6 +282,7 @@ def main():
     print(body)
     send_email(body, image_file)
     print("Email saadetud")
+
 
 if __name__ == "__main__":
     main()
