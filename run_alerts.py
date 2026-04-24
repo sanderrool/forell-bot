@@ -134,10 +134,10 @@ def build_series_from_data(point, data):
     parsed_times = [parse_api_time(t) for t in times]
     now = datetime.now(TALLINN_TZ)
 
-    past_idx = [i for i, t in enumerate(parsed_times) if t <= now][-24:]
+    past_idx = [i for i, t in enumerate(parsed_times) if t <= now][-48:]
     future_idx = [i for i, t in enumerate(parsed_times) if t > now][:48]
 
-    past_idx = past_idx[::2]
+    past_idx = past_idx[::4]
     future_idx = future_idx[::3]
 
     past_rows = build_rows(point, past_idx, times, speeds, dirs, precip, temp)
