@@ -50,9 +50,11 @@ def evaluate_point(point, speeds, dirs):
     future_speeds = speeds[48:96]
     future_dirs = dirs[48:96]
 
+    # 1. Torm minevikus
     if any(s > STORM_LIMIT for s in past_speeds):
         return False, "torm minevikus"
 
+    # 2. Meretuul minevikus
     good_past = sum(
         1 for s, d in zip(past_speeds, past_dirs)
         if sea_ok(d, point["sea_wind_min"], point["sea_wind_max"]) and s <= GOOD_WIND_MAX
@@ -61,6 +63,7 @@ def evaluate_point(point, speeds, dirs):
     if good_past < 12:
         return False, "meretuul pole olnud piisav"
 
+    # 3. Tulevik
     future_day = list(zip(future_speeds[:24], future_dirs[:24]))
 
     good_future = sum(
@@ -72,6 +75,15 @@ def evaluate_point(point, speeds, dirs):
         return False, "tulevik ei sobi"
 
     return True, "tingimused head"
+
+def calculate_rank(point, speeds, dirs):
+    future_speeds = speeds[48:96]
+    future_dirs = dirs[48:96]
+
+    return sum(
+        1 for s, d in zip(future_speeds[:24], future_dirs[:24])
+        if sea_ok(d, point["sea_wind_min"], point["sea_wind_max"]) and s <= GOOD_WIND_MAX
+    )
 
 def build_rows(point, indices, times, speeds, dirs, precip, temp):
     rows = []
@@ -134,36 +146,27 @@ def main():
 
     now = datetime.now(TALLINN_TZ)
 
-    head_spots = []
-    bad_spots = []
-    details = []
-
-    best_spot = None
-    best_score = -999
+    results = []
 
     for p in points:
         past, future, speeds, dirs = build_series(p)
         ok, reason = evaluate_point(p, speeds, dirs)
+        rank = calculate_rank(p, speeds, dirs)
 
-        # scoring
-        future_speeds = speeds[48:96]
-        future_dirs = dirs[48:96]
+        results.append({
+            "name": p["name"],
+            "point": p,
+            "past": past,
+            "future": future,
+            "ok": ok,
+            "reason": reason,
+            "rank": rank
+        })
 
-        score = sum(
-            1 for s, d in zip(future_speeds[:24], future_dirs[:24])
-            if sea_ok(d, p["sea_wind_min"], p["sea_wind_max"]) and s <= GOOD_WIND_MAX
-        )
+    # sorteerime ainult rank järgi (ei näita seda kasutajale)
+    results.sort(key=lambda x: x["rank"], reverse=True)
 
-        if score > best_score:
-            best_score = score
-            best_spot = (p["name"], reason)
-
-        if ok:
-            head_spots.append((p["name"], reason))
-        else:
-            bad_spots.append((p["name"], reason))
-
-        details.append((p, past, future))
+    best = results[0] if results else None
 
     lines = []
     lines.append("Forellipüügi raport")
@@ -172,43 +175,32 @@ def main():
 
     # PARIM KOHT
     lines.append("PARIM VÕIMALUS:")
-    if best_spot:
-        lines.append(f"{best_spot[0]} – {best_spot[1]}")
+    if best:
+        status = "GO" if best["ok"] else "WAIT"
+        lines.append(f"{best['name']} – {status}")
+        lines.append(f"- {best['reason']}")
     else:
         lines.append("Puudub")
-    lines.append("")
-
-    # HEAD
-    lines.append("HEAD KOHAD:")
-    if head_spots:
-        for name, reason in head_spots:
-            lines.append(f"{name} – OK")
-            lines.append(f"- {reason}")
-    else:
-        lines.append("Puuduvad")
-
-    lines.append("")
-    lines.append("Halvad kohad:")
-    for name, reason in bad_spots:
-        lines.append(f"{name} – EI")
-        lines.append(f"- {reason}")
 
     lines.append("")
     lines.append("="*60)
 
-    # detail
-    for p, past, future in details:
-        lines.append(f"{p['name']} (sektor {p['sea_wind_min']}-{p['sea_wind_max']}°)")
+    # KÕIK KOHAD
+    for r in results:
+        status = "GO" if r["ok"] else "WAIT"
+
+        lines.append(f"{r['name']} – {status}")
+        lines.append(f"- {r['reason']}")
 
         lines.append("--- Minevik ---")
-        lines.extend(past)
+        lines.extend(r["past"])
 
         lines.append("================================")
         lines.append("============ TULEVIK ===========")
         lines.append("================================")
 
         lines.append("--- Tulevik ---")
-        lines.extend(future)
+        lines.extend(r["future"])
 
         lines.append("")
 
