@@ -10,7 +10,10 @@ from datetime import datetime
 from dotenv import load_dotenv
 from zoneinfo import ZoneInfo
 
-import map_wind
+import matplotlib
+matplotlib.use("Agg")  # <-- kriitiline fix GitHub jaoks
+import matplotlib.pyplot as plt
+import numpy as np
 
 load_dotenv()
 
@@ -49,6 +52,44 @@ def get_weather(lat, lon):
     }
     return requests.get(url, params=params).json()
 
+# -------------------------
+# KAARDI LOOMINE
+# -------------------------
+def create_map(points):
+    fig, ax = plt.subplots(figsize=(8, 10))
+
+    for p in points:
+        data = get_weather(p["lat"], p["lon"])
+
+        speed = data["hourly"]["windspeed_10m"][0]
+        direction = data["hourly"]["winddirection_10m"][0]
+
+        ax.scatter(p["lon"], p["lat"])
+
+        angle = np.deg2rad(direction)
+        dx = np.sin(angle) * 0.05
+        dy = np.cos(angle) * 0.05
+
+        ax.arrow(p["lon"], p["lat"], dx, dy, head_width=0.02)
+
+        ax.text(
+            p["lon"], p["lat"],
+            f"{p['name']}\n{speed:.1f} m/s\n{int(direction)}°",
+            fontsize=8
+        )
+
+    ax.set_title("Tuule suund ja tugevus")
+    ax.grid()
+
+    filename = "wind_map.png"
+    plt.savefig(filename)
+    plt.close()
+
+    return filename
+
+# -------------------------
+# ANALÜÜS
+# -------------------------
 def evaluate_point(point, speeds, dirs):
     past_speeds = speeds[:48]
     past_dirs = dirs[:48]
@@ -66,10 +107,8 @@ def evaluate_point(point, speeds, dirs):
     if good_past < 12:
         return False, "meretuul pole olnud piisav"
 
-    future_day = list(zip(future_speeds[:24], future_dirs[:24]))
-
     good_future = sum(
-        1 for s, d in future_day
+        1 for s, d in zip(future_speeds[:24], future_dirs[:24])
         if sea_ok(d, point["sea_wind_min"], point["sea_wind_max"]) and s <= GOOD_WIND_MAX
     )
 
@@ -132,6 +171,9 @@ def build_series(point):
 
     return past_rows, future_rows, speeds, dirs
 
+# -------------------------
+# EMAIL
+# -------------------------
 def send_email(body, image_file):
     msg = MIMEMultipart()
     msg["Subject"] = "Forellipüügi raport"
@@ -153,6 +195,9 @@ def send_email(body, image_file):
         server.login(EMAIL_SENDER, EMAIL_PASSWORD)
         server.sendmail(EMAIL_SENDER, EMAIL_RECEIVERS, msg.as_string())
 
+# -------------------------
+# MAIN
+# -------------------------
 def main():
     with open("locations.json", "r", encoding="utf-8") as f:
         points = json.load(f)["points"]
@@ -180,12 +225,8 @@ def main():
 
     best = results[0] if results else None
 
-    # loome kaardi
-    try:
-    image_file = map_wind.create_map()
-except Exception as e:
-    print(f"Map error: {e}")
-    image_file = None
+    # KAART
+    image_file = create_map(points)
 
     lines = []
     lines.append("Forellipüügi raport")
