@@ -2,10 +2,15 @@ import json
 import os
 import requests
 import smtplib
+from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
+from email import encoders
 from datetime import datetime
 from dotenv import load_dotenv
 from zoneinfo import ZoneInfo
+
+import map_wind
 
 load_dotenv()
 
@@ -50,11 +55,9 @@ def evaluate_point(point, speeds, dirs):
     future_speeds = speeds[48:96]
     future_dirs = dirs[48:96]
 
-    # 1. Torm minevikus
     if any(s > STORM_LIMIT for s in past_speeds):
         return False, "torm minevikus"
 
-    # 2. Meretuul minevikus
     good_past = sum(
         1 for s, d in zip(past_speeds, past_dirs)
         if sea_ok(d, point["sea_wind_min"], point["sea_wind_max"]) and s <= GOOD_WIND_MAX
@@ -63,7 +66,6 @@ def evaluate_point(point, speeds, dirs):
     if good_past < 12:
         return False, "meretuul pole olnud piisav"
 
-    # 3. Tulevik
     future_day = list(zip(future_speeds[:24], future_dirs[:24]))
 
     good_future = sum(
@@ -130,11 +132,22 @@ def build_series(point):
 
     return past_rows, future_rows, speeds, dirs
 
-def send_email(body):
-    msg = MIMEText(body)
+def send_email(body, image_file):
+    msg = MIMEMultipart()
     msg["Subject"] = "Forellipüügi raport"
     msg["From"] = EMAIL_SENDER
     msg["To"] = ", ".join(EMAIL_RECEIVERS)
+
+    msg.attach(MIMEText(body))
+
+    if image_file and os.path.exists(image_file):
+        with open(image_file, "rb") as f:
+            part = MIMEBase("application", "octet-stream")
+            part.set_payload(f.read())
+
+        encoders.encode_base64(part)
+        part.add_header("Content-Disposition", f"attachment; filename={image_file}")
+        msg.attach(part)
 
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
         server.login(EMAIL_SENDER, EMAIL_PASSWORD)
@@ -163,17 +176,18 @@ def main():
             "rank": rank
         })
 
-    # sorteerime ainult rank järgi (ei näita seda kasutajale)
     results.sort(key=lambda x: x["rank"], reverse=True)
 
     best = results[0] if results else None
+
+    # loome kaardi
+    image_file = map_wind.create_map()
 
     lines = []
     lines.append("Forellipüügi raport")
     lines.append(f"Aeg: {fmt_dt(now)}")
     lines.append("")
 
-    # PARIM KOHT
     lines.append("PARIM VÕIMALUS:")
     if best:
         status = "GO" if best["ok"] else "WAIT"
@@ -185,7 +199,6 @@ def main():
     lines.append("")
     lines.append("="*60)
 
-    # KÕIK KOHAD
     for r in results:
         status = "GO" if r["ok"] else "WAIT"
 
@@ -207,7 +220,7 @@ def main():
     body = "\n".join(lines)
 
     print(body)
-    send_email(body)
+    send_email(body, image_file)
     print("Email saadetud")
 
 if __name__ == "__main__":
