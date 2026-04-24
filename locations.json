@@ -1,0 +1,73 @@
+{
+  "points": [
+    {
+      "name": "Kuradisaar",
+      "lat": 59.622478,
+      "lon": 25.910644,
+      "sea_wind_min": 270,
+      "sea_wind_max": 70,
+      "good_wind_max": 5.0,
+      "muddy_wind_threshold": 5.0,
+      "recovery_hours": 24,
+      "min_good_streak_hours": 24,
+      "min_future_ok_ratio": 0.5,
+      "min_future_ok_streak": 12
+    },
+    {
+      "name": "Kaberneeme tipp",
+      "lat": 59.528540,
+      "lon": 25.269620,
+      "sea_wind_min": 290,
+      "sea_wind_max": 45
+    },
+    {
+      "name": "Neeme",
+      "lat": 59.541353,
+      "lon": 25.140067,
+      "sea_wind_min": 280,
+      "sea_wind_max": 30
+    },
+    {
+      "name": "Kolga-Aabla",
+      "lat": 59.573699,
+      "lon": 25.526377,
+      "sea_wind_min": 280,
+      "sea_wind_max": 320
+    },
+    {
+      "name": "Naskali",
+      "lat": 59.623465,
+      "lon": 25.517835,
+      "sea_wind_min": 35,
+      "sea_wind_max": 80
+    },
+    {
+      "name": "Merivälja",
+      "lat": 59.491044,
+      "lon": 24.830477,
+      "sea_wind_min": 270,
+      "sea_wind_max": 300
+    },
+    {
+      "name": "Viimsi",
+      "lat": 59.570522,
+      "lon": 24.795610,
+      "sea_wind_min": 270,
+      "sea_wind_max": 300
+    },
+    {
+      "name": "Leetse",
+      "lat": 59.372802,
+      "lon": 24.121322,
+      "sea_wind_min": 300,
+      "sea_wind_max": 45
+    },
+    {
+      "name": "Dirhami",
+      "lat": 59.210740,
+      "lon": 23.490529,
+      "sea_wind_min": 200,
+      "sea_wind_max": 20
+    }
+  ]
+}
