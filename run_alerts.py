@@ -181,7 +181,11 @@ def main():
     best = results[0] if results else None
 
     # loome kaardi
+    try:
     image_file = map_wind.create_map()
+except Exception as e:
+    print(f"Map error: {e}")
+    image_file = None
 
     lines = []
     lines.append("Forellipüügi raport")
